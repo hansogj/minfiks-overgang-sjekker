@@ -138,6 +138,7 @@ function Login({ onLogin, loading, error }: LoginProps) {
             value={username}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
             required
+            aria-required="true"
           />
         </div>
         <div className="form-group">
@@ -148,10 +149,11 @@ function Login({ onLogin, loading, error }: LoginProps) {
             value={password}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
             required
+            aria-required="true"
           />
         </div>
         <button type="submit" disabled={loading}>{loading ? 'Logging in...' : 'Login'}</button>
-        {error && <p className="error-message">{error}</p>}
+        {error && <p className="error-message" role="alert">{error}</p>}
         <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '1rem' }}>
           Note: Login is mocked. Enter any details to proceed.
         </p>
@@ -173,6 +175,7 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
 
   // Club search
   const [clubQuery, setClubQuery] = useState('');
+  const [seasonId, setSeasonId] = useState('107'); // Default to 2024
   const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
 
@@ -194,14 +197,29 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
     setLoading(prev => ({ ...prev, clubs: true }));
     setError(null);
     try {
-      const cached = await getFromDB<Club[]>('club-search', clubQuery);
+      const cacheKey = `${clubQuery}-${seasonId}`;
+      const cached = await getFromDB<Club[]>(
+        'club-search',
+        cacheKey
+      );
       if (isCacheValid(cached)) {
-          setClubs(cached.data);
-          return;
+        setClubs(cached.data);
+        return;
       }
-      
-      const response = await fetch(`/TournamentSearchPage/SearchClubs?term=${clubQuery}`);
-      if (!response.ok) throw new Error('Failed to fetch clubs.');
+
+      const body = new URLSearchParams();
+      body.append('term', clubQuery);
+      body.append('seasonId', seasonId);
+
+      const response = await fetch(`/TournamentSearchPage/SearchClubs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body,
+      });
+      if (!response.ok)
+        throw new Error(`Failed to fetch clubs. Status: ${response.status}`);
       const rawData: { Id: number; Name: string }[] = await response.json();
 
       const data: Club[] = rawData.map(club => ({
@@ -210,14 +228,18 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
       }));
 
       setClubs(data);
-      await setToDB('club-search', { key: clubQuery, data, timestamp: Date.now() });
+      await setToDB('club-search', {
+        key: cacheKey,
+        data,
+        timestamp: Date.now(),
+      });
     } catch (err) {
       setError((err as Error).message);
       setClubs([]);
     } finally {
       setLoading(prev => ({ ...prev, clubs: false }));
     }
-  }, [clubQuery, onActivity]);
+  }, [clubQuery, seasonId, onActivity]);
 
   const handleSearchClubs = (e: React.FormEvent) => {
     e.preventDefault();
@@ -413,25 +435,48 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
         <button onClick={onLogout}>Logout</button>
       </header>
       <main>
-        {error && <p className="error-message">{error}</p>}
+        {error && <p className="error-message" role="alert">{error}</p>}
 
         <div className="tracker-section">
           <h2>1. Find a Club</h2>
           <form onSubmit={handleSearchClubs} className="search-form">
-            <input
-              type="text"
-              value={clubQuery}
-              onChange={e => setClubQuery(e.target.value)}
-              placeholder="e.g., Nesodden IF (start typing...)"
-            />
-            <button type="submit" disabled={loading.clubs}>
+            <div className="form-group" style={{ flexGrow: 2 }}>
+              <label htmlFor="club-search-input">Club Name</label>
+              <input
+                id="club-search-input"
+                type="text"
+                value={clubQuery}
+                onChange={e => setClubQuery(e.target.value)}
+                placeholder="e.g., Nesodden IF (start typing...)"
+              />
+            </div>
+            <div className="form-group" style={{ flexGrow: 1 }}>
+              <label htmlFor="season-select">Season</label>
+              <select
+                id="season-select"
+                value={seasonId}
+                onChange={e => setSeasonId(e.target.value)}
+              >
+                <option value="107">2024</option>
+                <option value="106">2023</option>
+                <option value="105">2022</option>
+              </select>
+            </div>
+            <button type="submit" disabled={!clubQuery || loading.clubs}>
               {loading.clubs ? 'Searching...' : 'Search'}
             </button>
           </form>
           {clubs.length > 0 && (
-            <ul className="results-list">
+            <ul className="results-list" role="listbox">
               {clubs.map(club => (
-                <li key={club.id} onClick={() => handleSelectClub(club)}>
+                <li
+                  key={club.id}
+                  onClick={() => handleSelectClub(club)}
+                  role="option"
+                  aria-selected="false"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSelectClub(club)}
+                >
                   {club.name}
                 </li>
               ))}
@@ -442,25 +487,25 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
         {selectedClub && (
           <div className="tracker-section">
             <h2>2. Select Teams for {selectedClub.name}</h2>
-            {loading.teams ? <div className="loading-spinner"></div> : (
+            {loading.teams ? <div className="loading-spinner" aria-label="Loading teams"></div> : (
                 <>
                 <div className="filters">
                     <div className="form-group">
-                        <label>Filter by Genre</label>
-                        <select value={genreFilter} onChange={e => setGenreFilter(e.target.value)}>
+                        <label htmlFor="genre-filter">Filter by Genre</label>
+                        <select id="genre-filter" value={genreFilter} onChange={e => setGenreFilter(e.target.value)}>
                             <option value="">All Genres</option>
                             {genreOptions.map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                     </div>
                     <div className="form-group">
-                        <label>Filter by Age Class</label>
-                        <select value={ageFilter} onChange={e => setAgeFilter(e.target.value)}>
+                        <label htmlFor="age-filter">Filter by Age Class</label>
+                        <select id="age-filter" value={ageFilter} onChange={e => setAgeFilter(e.target.value)}>
                             <option value="">All Ages</option>
                             {ageOptions.map(a => <option key={a} value={a}>{a}</option>)}
                         </select>
                     </div>
                 </div>
-                <div className="team-list">
+                <div className="team-list" role="group" aria-labelledby="team-list-heading">
                     {filteredTeams.map(team => (
                         <div key={team.id} className="team-item">
                             <input
@@ -482,11 +527,13 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
             <div className="tracker-section">
                 <h2>3. Analyze Player Usage</h2>
                 <div className="form-group">
-                    <label>Select Competition</label>
+                    <label htmlFor="competition-select">Select Competition</label>
                     <select 
+                      id="competition-select"
                       value={competitionId || ''} 
                       onChange={e => setCompetitionId(Number(e.target.value))}
                       disabled={selectedTeamsCompetitions.length === 0}
+                      aria-required="true"
                     >
                         <option value="">-- Select a competition --</option>
                         {selectedTeamsCompetitions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -498,7 +545,7 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
             </div>
         )}
 
-        {loading.usage && <div className="loading-spinner"></div>}
+        {loading.usage && <div className="loading-spinner" aria-label="Analyzing player usage"></div>}
         
         {playerUsage && (
           <div className="tracker-section">
@@ -508,17 +555,16 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
                     <table className="usage-table">
                         <thead>
                             <tr>
-                                <th>Player Name</th>
-                                {playerUsage.weeks.map(week => <th key={week}>{week}</th>)}
+                                <th scope="col">Player Name</th>
+                                {playerUsage.weeks.map(week => <th scope="col" key={week}>{week}</th>)}
                             </tr>
                         </thead>
                         <tbody>
                             {Object.entries(playerUsage.players)
-                                // Fix: Explicitly type the destructured parameters in the sort callback to ensure type safety.
                                 .sort(([, nameA]: [string, string], [, nameB]: [string, string]) => nameA.localeCompare(nameB))
                                 .map(([playerId, playerName]) => (
                                 <tr key={playerId}>
-                                    <td>{playerName}</td>
+                                    <th scope="row">{playerName}</th>
                                     {playerUsage.weeks.map(week => (
                                         <td key={week}>
                                             {playerUsage.usage[playerId]?.[week] || '—'}

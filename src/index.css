@@ -139,10 +139,15 @@ input[type="text"], input[type="password"], select {
 .search-form {
   display: flex;
   gap: 1rem;
+  align-items: flex-end;
 }
 
-.search-form input {
-  flex-grow: 1;
+.search-form .form-group {
+  margin-bottom: 0;
+}
+
+.search-form button {
+  flex-shrink: 0; /* Prevents the button from shrinking */
 }
 
 .results-list {
@@ -162,9 +167,10 @@ input[type="text"], input[type="password"], select {
   transition: background-color 0.2s, border-color 0.2s;
 }
 
-.results-list li:hover {
+.results-list li:hover, .results-list li:focus {
   background-color: #e9f4ff;
   border-color: var(--primary-color);
+  outline: none;
 }
 
 .filters {
@@ -214,29 +220,28 @@ input[type="text"], input[type="password"], select {
   min-width: 100px;
 }
 
-.usage-table th {
+.usage-table thead th {
   background-color: #f8f9fa;
   font-weight: 600;
   position: sticky;
   top: 0;
+  z-index: 1;
 }
 .usage-table td {
   font-size: 0.9rem;
   text-align: center;
 }
 
-.usage-table th:first-child, .usage-table td:first-child {
+.usage-table tbody th {
   position: sticky;
   left: 0;
   background-color: #f8f9fa;
-  text-align: left;
-  min-width: 150px;
+  z-index: 1;
 }
 
-.usage-table td:first-child {
-  background-color: var(--card-background-color);
-}
-
-.usage-table tr:hover td:not(:first-child) {
+.usage-table tbody tr:hover td {
     background-color: #e9f4ff;
+}
+.usage-table tbody tr:hover th {
+    background-color: #e2eef9;
 }
