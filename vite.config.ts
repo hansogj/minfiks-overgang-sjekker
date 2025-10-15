@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://eps.staging.fotball.no',
+        target: 'https://www.fotball.no',
         changeOrigin: true,
         secure: false,
       },
