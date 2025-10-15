@@ -110,6 +110,12 @@ const apiFetch = (url: string, token: string, options: RequestInit = {}) => {
   });
 };
 
+// --- Season Helpers ---
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+const seasonIdForYear = (year: number) => (year - 1917).toString();
+
+
 // --- Components ---
 interface LoginProps {
     onLogin: (username: string, password: string) => void;
@@ -175,7 +181,7 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
 
   // Club search
   const [clubQuery, setClubQuery] = useState('');
-  const [seasonId, setSeasonId] = useState('107'); // Default to 2024
+  const [seasonId, setSeasonId] = useState(seasonIdForYear(currentYear));
   const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
 
@@ -222,10 +228,19 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
         throw new Error(`Failed to fetch clubs. Status: ${response.status}`);
       const rawData: { Id: number; Name: string }[] = await response.json();
 
-      const data: Club[] = rawData.map(club => ({
+      // Filter out clubs without a name and ensure uniqueness by ID
+      const uniqueClubs = new Map<number, { Id: number; Name: string }>();
+      rawData.forEach(club => {
+        if (club.Id && club.Name && club.Name.trim() !== '') {
+          uniqueClubs.set(club.Id, club);
+        }
+      });
+      
+      const data: Club[] = Array.from(uniqueClubs.values()).map(club => ({
         id: club.Id,
         name: club.Name,
       }));
+
 
       setClubs(data);
       await setToDB('club-search', {
@@ -457,9 +472,11 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
                 value={seasonId}
                 onChange={e => setSeasonId(e.target.value)}
               >
-                <option value="107">2024</option>
-                <option value="106">2023</option>
-                <option value="105">2022</option>
+                {years.map(year => (
+                  <option key={year} value={seasonIdForYear(year)}>
+                    {year}
+                  </option>
+                ))}
               </select>
             </div>
             <button type="submit" disabled={!clubQuery || loading.clubs}>
