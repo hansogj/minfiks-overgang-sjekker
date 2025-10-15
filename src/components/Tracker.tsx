@@ -63,19 +63,21 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
       });
       if (!response.ok)
         throw new Error(`Failed to fetch clubs. Status: ${response.status}`);
-      const rawData: { Id: number; Name: string }[] = await response.json();
+      
+      type RawClubData = { value: number; label: string };
+      const rawData: RawClubData[] = await response.json();
 
-      // Filter out clubs without a name and ensure uniqueness by ID
-      const uniqueClubs = new Map<number, { Id: number; Name: string }>();
+      // Filter out clubs without a name/id and ensure uniqueness by ID
+      const uniqueClubs = new Map<number, RawClubData>();
       rawData.forEach(club => {
-        if (club.Id && club.Name && club.Name.trim() !== '') {
-          uniqueClubs.set(club.Id, club);
+        if (club.value && club.label && club.label.trim() !== '') {
+          uniqueClubs.set(club.value, club);
         }
       });
       
       const data: Club[] = Array.from(uniqueClubs.values()).map(club => ({
-        id: club.Id,
-        name: club.Name,
+        id: club.value,
+        name: club.label,
       }));
 
 
