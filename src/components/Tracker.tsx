@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getFromDB, isCacheValid, setToDB } from '../db';
 import type { Club, Match, PlayerUsageData, Team } from '../types';
 import { apiFetch } from '../api';
-import { years, seasonIdForYear, initialSeasonId } from '../utils';
+import { years, seasonIdForYear, initialSeasonId, yearForSeasonId } from '../utils';
 
 
 interface TrackerProps {
@@ -121,6 +121,9 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
     setClubQuery('');
     setPlayerUsage(null);
     setSelectedTeamIds(new Set());
+    setAllTeams([]); // Clear previous teams
+    setGenreFilter(''); // Reset filters
+    setAgeFilter(''); // Reset filters
   };
 
   const handleFetchPlayerUsage = async () => {
@@ -219,25 +222,32 @@ function Tracker({ token, onLogout, onActivity }: TrackerProps) {
         setLoading(prev => ({ ...prev, teams: true }));
         setError(null);
         try {
-            const cached = await getFromDB<Team[]>('teams', selectedClub.id);
+            const cacheKey = `${selectedClub.id}-${seasonId}`;
+            const cached = await getFromDB<Team[]>('teams', cacheKey);
             if (isCacheValid(cached)) {
                 setAllTeams(cached.data);
                 return;
             }
 
-            const response = await apiFetch(`/api/Teams?clubId=${selectedClub.id}`, token);
-            if (!response.ok) throw new Error('Failed to fetch teams.');
+            const response = await apiFetch(`/api/Clubs/${selectedClub.id}/Teams?seasonId=${seasonId}`, token);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error(`No teams found for ${selectedClub.name} in the ${yearForSeasonId(seasonId)} season. Please try another season.`);
+                }
+                throw new Error('Failed to fetch teams.');
+            }
             const data = await response.json();
             setAllTeams(data);
-            await setToDB('teams', { key: selectedClub.id, data, timestamp: Date.now() });
+            await setToDB('teams', { key: cacheKey, data, timestamp: Date.now() });
         } catch (err) {
             setError((err as Error).message);
+            setAllTeams([]); // Clear teams on error
         } finally {
             setLoading(prev => ({ ...prev, teams: false }));
         }
     };
     fetchTeams();
-  }, [selectedClub, token, onActivity]);
+  }, [selectedClub, token, onActivity, seasonId]);
   
   const { filteredTeams, genreOptions, ageOptions, competitionOptions } = useMemo(() => {
     const genreSet = new Set<string>();
